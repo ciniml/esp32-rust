@@ -1,0 +1,22 @@
+[package]
+authors = ["Kenta IDA"]
+name = "peripheral"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+idf = {path = "../idf"}
+freertos_rs = {path = "../../../../freertos.rs"}
+embedded-hal = {version="0.2.3", features=["unproven"]}
+
+[profile.dev]
+lto = true 
+incremental = false
+debug = false
+codegen-units = 1
+
+[profile.release]
+lto = true
+incremental = false
+debug = false
+codegen-units = 1   

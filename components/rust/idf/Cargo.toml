@@ -1,0 +1,21 @@
+[package]
+authors = ["Kenta IDA"]
+name = "idf"
+version = "0.1.0"
+edition = "2015"
+
+[build-dependencies]
+bindgen = "0.49.2"
+walkdir = "2"
+
+[profile.dev]
+lto = true 
+incremental = false
+debug = false
+codegen-units = 1
+
+[profile.release]
+lto = true
+incremental = false
+debug = false
+codegen-units = 1

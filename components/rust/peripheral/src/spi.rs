@@ -150,7 +150,7 @@ impl SpiBus {
         }
     }
 
-    pub fn add_device<TTransactionContext, FPre, FPost>(&mut self, config: SpiDeviceInterfaceConfig, pre_callback: FPre, post_callback: FPost ) -> Result<Arc<SpiDeviceBusLock<TTransactionContext>>, IdfError> 
+    pub fn add_device<TTransactionContext, FPre, FPost>(&mut self, config: SpiDeviceInterfaceConfig, pre_callback: FPre, post_callback: FPost ) -> Result<SpiDeviceBusLock<TTransactionContext>, IdfError> 
         where FPre : FnMut(&TTransactionContext) + 'static, FPost : FnMut(&TTransactionContext) + 'static {
         let mut handle: idf::spi_device_handle_t = ptr::null_mut();
         //let guard = self.lock.lock(Duration::infinite()).unwrap();
@@ -242,17 +242,15 @@ pub struct SpiDevice<TTransactionContext> {
     post_callback:  Box<FnMut(&TTransactionContext)>,
 }
 
-pub type SpiDeviceRef<TTransactionContext> = Arc<SpiDeviceBusLock<TTransactionContext>>;
-
 struct SpiTransactionContext<'a, TTransactionContext> {
     device: &'a mut SpiDevice<TTransactionContext>,
     context: TTransactionContext,
 }
 
 impl<TTransactionContext> SpiDevice<TTransactionContext> {
-    fn new<FPre, FPost>(handle: idf::spi_device_handle_t, config: idf::spi_device_interface_config_t, pre_callback: FPre, post_callback: FPost) -> Result<SpiDeviceRef<TTransactionContext>, ()> 
+    fn new<FPre, FPost>(handle: idf::spi_device_handle_t, config: idf::spi_device_interface_config_t, pre_callback: FPre, post_callback: FPost) -> Result<SpiDeviceBusLock<TTransactionContext>, ()> 
         where FPre : FnMut(&TTransactionContext) + 'static, FPost : FnMut(&TTransactionContext) + 'static {
-        Ok( Arc::new(SpiDeviceBusLock::new(SpiDevice{handle: handle, config: config, pre_callback: Box::new(pre_callback), post_callback: Box::new(post_callback)})))
+        Ok( SpiDeviceBusLock::new(SpiDevice{handle: handle, config: config, pre_callback: Box::new(pre_callback), post_callback: Box::new(post_callback)}))
     }
 
     unsafe extern "C" fn pre_callback_handler(idf_transaction: *mut idf::spi_transaction_t) {
@@ -347,5 +345,15 @@ impl Write<u8> for SpiDevice<()>
     fn write(&mut self, words: &[u8]) -> Result<(), IdfError> {
         let transaction = SpiTransaction::<()>::new_write(words, ());
         self.transfer(transaction)
+    }
+}
+
+impl Write<u8> for SpiDeviceBusLock<()>
+{
+    type Error = IdfError;
+    fn write(&mut self, words: &[u8]) -> Result<(), IdfError> {
+        let transaction = SpiTransaction::<()>::new_write(words, ());
+        let mut device = self.lock().unwrap();
+        device.transfer(transaction)
     }
 }

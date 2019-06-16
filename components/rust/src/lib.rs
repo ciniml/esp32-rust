@@ -12,6 +12,10 @@ use core::str;
 use rand::prelude::*;
 
 use m5stack::*;
+use embedded_graphics::coord::Coord;
+use embedded_graphics::fonts::Font6x8;
+use embedded_graphics::prelude::*;
+use embedded_graphics::primitives::{Circle, Line};
 
 use freertos_rs::*;
 
@@ -134,9 +138,18 @@ pub extern fn rust_main() {
     };
     let mut spi_bus = SpiBus::new(SpiHostDevice::Vspi, spi_bus_config, 0).unwrap();
     print_fmt(format_args!("Initializing LCD...\n"));
-    let mut lcd = Lcd::new(&mut spi_bus, GpioPin14, GpioPin27, GpioPin33, GpioPin32).unwrap();
-    print_fmt(format_args!("Resetting LCD...\n"));
-    lcd.reset().unwrap();
+    let mut lcd = new_lcd(&mut spi_bus, GpioPin14, GpioPin27, GpioPin33, GpioPin32).unwrap();
+    
+    display.draw(Circle::new(Coord::new(64, 64), 64).with_stroke(Some(1u8)));
+    display.draw(Line::new(Coord::new(64, 64), Coord::new(0, 64)).with_stroke(Some(1u8)));
+    display.draw(Line::new(Coord::new(64, 64), Coord::new(80, 80)).with_stroke(Some(1u8)));
+
+    display.draw(
+        Font6x8::render_str("Hello World!")
+            .with_stroke(Some(1u8))
+            .translate(Coord::new(5, 50)),
+    );
+
 
     let mainTask = Task::current().unwrap();
     let queueRequestTask = queue.clone();

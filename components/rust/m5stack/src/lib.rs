@@ -117,7 +117,7 @@ const ILI9341_MADCTL_MH:u8 = 0x04;
 impl Lcd {
     pub fn new(bus: &mut SpiBus, pin_cs: GpioPin, pin_dc: GpioPin, pin_rst: GpioPin, pin_bl: GpioPin) -> Result<Lcd, LcdError> {
         let spi_device_config = SpiDeviceInterfaceConfig {
-            cs_pin: None, //Some(pin_cs),
+            cs_pin: Some(pin_cs),
             clock_speed_hz: 10000000,
             ..Default::default()
         };
@@ -137,11 +137,11 @@ impl Lcd {
         bl.set_low();
         cs.set_high();
 
-        let device = bus.add_device(spi_device_config, |_|{}, |_|{}); /*move |dc:&bool| {
+        let device = bus.add_device(spi_device_config, move |dc:&bool| {
             let mut dc_pin = pin_dc.normal();
             dc_pin.set_level(*dc);
         }, |_| {
-        });*/
+        });
         match device {
             Ok(device) => Ok(Lcd{spi: device, pin_dc: dc, pin_rst: rst, pin_bl: bl, pin_cs: cs}),
             Err(err) => Err(LcdError::IdfError(err)),
@@ -195,25 +195,21 @@ impl Lcd {
     }
 
     pub fn write_cmd(&mut self, command: u8) -> Result<(), LcdError> {
-        self.pin_cs.set_low();
         let buffer = [command];
         let transaction = SpiTransaction::new_write(&buffer, false);
         let mut device = self.spi.as_ref().lock().unwrap();
-        self.pin_dc.set_low();
         match device.transfer(transaction) {
-            Ok(_) => { self.pin_cs.set_high(); Ok(()) },
-            Err(err) => { self.pin_cs.set_high(); Err(LcdError::IdfError(err)) },
+            Ok(_) => { Ok(()) },
+            Err(err) => { Err(LcdError::IdfError(err)) },
         }
     }
     
     pub fn write_data(&mut self, data: &[u8]) -> Result<(), LcdError> {
-        self.pin_cs.set_low();
         let transaction = SpiTransaction::new_write(data, true);
         let mut device = self.spi.as_ref().lock().unwrap();
-        self.pin_dc.set_high();
         match device.transfer(transaction) {
-            Ok(_) => { self.pin_cs.set_high(); Ok(()) },
-            Err(err) => { self.pin_cs.set_high(); Err(LcdError::IdfError(err)) },
+            Ok(_) => { Ok(()) },
+            Err(err) => { Err(LcdError::IdfError(err)) },
         }
     }
 
@@ -225,7 +221,6 @@ impl Lcd {
     pub fn read_data(&mut self, data: &mut [u8]) -> Result<(), LcdError> {
         let transaction = SpiTransaction::new_read(data, true);
         let mut device = self.spi.as_ref().lock().unwrap();
-        self.pin_dc.set_high();
         match device.transfer(transaction) {
             Ok(_) => Ok(()),
             Err(err) => Err(LcdError::IdfError(err)),

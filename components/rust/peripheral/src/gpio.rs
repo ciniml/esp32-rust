@@ -17,6 +17,7 @@ use idf::std::os::raw::*;
 
 use freertos_rs::*;
 use embedded_hal::digital::v2::*;
+use embedded_hal::digital::v1_compat::OldOutputPin;
 
 type IdfError = idf::esp_err_t;
 
@@ -210,7 +211,12 @@ impl NormalGpio {
     pub fn get_level(&self) -> Result<bool, IdfError> {
         Ok( unsafe { idf::gpio_get_level(self.number) != 0 } )
     }
+    pub fn to_v1(self) -> NormalGpioV1 {
+        NormalGpioV1::new(self)
+    }
 }
+
+pub type NormalGpioV1 = OldOutputPin<NormalGpio>;
 
 impl OutputPin for NormalGpio {
     type Error = IdfError;

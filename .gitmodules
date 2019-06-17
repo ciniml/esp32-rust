@@ -4,3 +4,6 @@
 [submodule "components/m5stack"]
 	path = components/m5stack
 	url = https://github.com/m5stack/m5stack
+[submodule "components/rust/ili9341"]
+	path = components/rust/ili9341
+	url = https://github.com/yuri91/ili9341-rs

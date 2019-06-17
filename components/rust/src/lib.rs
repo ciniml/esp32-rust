@@ -15,7 +15,9 @@ use m5stack::*;
 use embedded_graphics::coord::Coord;
 use embedded_graphics::fonts::Font6x8;
 use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::{Circle, Line};
+use embedded_graphics::primitives::{Circle, Line, Rect};
+use embedded_graphics::image::Image16BPP;
+use embedded_graphics::image::Image8BPP;
 
 use freertos_rs::*;
 
@@ -114,13 +116,39 @@ unsafe extern "C" fn event_handler(ctx: *mut std::os::raw::c_void, event: *mut s
 pub extern fn rust_main() {
     print_str("Hello from Rust!\n");
     print_fmt(format_args!("Hello formatted from {}\n", "Rust"));
+
+    
+    
     let queue = Arc::new( Queue::<(i32, i32, i32, i32, u32)>::new(32).unwrap() );
     let queueDrawTask = queue.clone();
     let _drawTask = Task::new().name("line task").stack_size(4096).core(1).start(move || {
+        let spi_bus_config = SpiBusConfig {
+            mosi_pin: GpioPin23,
+            miso_pin: GpioPin19,
+            sclk_pin: GpioPin18,
+            quadwp_pin: None,
+            quadhd_pin: None,
+            max_transfer_size: 1024,
+        };
+        let mut spi_bus = SpiBus::new(SpiHostDevice::Vspi, spi_bus_config, 0).unwrap();
+        print_fmt(format_args!("Initializing LCD...\n"));
+        let mut display = new_lcd(&mut spi_bus, GpioPin14, GpioPin27, GpioPin33, GpioPin32).unwrap();
+        
+        //display.draw(Rect::new(Coord::new(0, 0), Coord::new(320, 240)).fill(Some(0x0000u16)));
+        display.draw(
+            Font6x8::render_str("Hello World!")
+                .stroke(Some(0xfffu16))
+                .translate(Coord::new(5, 50)),
+        );
+
+        let image = Image8BPP::<u8>::new(include_bytes!("../../../fuga_8.raw"), 240, 240);
+        display.draw(&image);
+
         loop {
             if let Ok((x0, y0, x1, y1, color)) = queueDrawTask.receive(Duration::infinite()) {
                 //m5display.drawLine(x0, y0, x1, y1, color);
-                TaskDelay::new().delay_until(Duration::ms(10));
+                //TaskDelay::new().delay_until(Duration::ms(10));
+                display.draw(Line::new(Coord::new(x0, y0), Coord::new(x1, y1)).stroke(Some(color as u16)));
             }
             unsafe {
                 esp_task_wdt_reset();
@@ -128,27 +156,6 @@ pub extern fn rust_main() {
         }
     }).unwrap();
     
-    let spi_bus_config = SpiBusConfig {
-        mosi_pin: GpioPin23,
-        miso_pin: GpioPin19,
-        sclk_pin: GpioPin18,
-        quadwp_pin: None,
-        quadhd_pin: None,
-        max_transfer_size: 1024,
-    };
-    let mut spi_bus = SpiBus::new(SpiHostDevice::Vspi, spi_bus_config, 0).unwrap();
-    print_fmt(format_args!("Initializing LCD...\n"));
-    let mut lcd = new_lcd(&mut spi_bus, GpioPin14, GpioPin27, GpioPin33, GpioPin32).unwrap();
-    
-    display.draw(Circle::new(Coord::new(64, 64), 64).with_stroke(Some(1u8)));
-    display.draw(Line::new(Coord::new(64, 64), Coord::new(0, 64)).with_stroke(Some(1u8)));
-    display.draw(Line::new(Coord::new(64, 64), Coord::new(80, 80)).with_stroke(Some(1u8)));
-
-    display.draw(
-        Font6x8::render_str("Hello World!")
-            .with_stroke(Some(1u8))
-            .translate(Coord::new(5, 50)),
-    );
 
 
     let mainTask = Task::current().unwrap();
@@ -157,9 +164,9 @@ pub extern fn rust_main() {
         let seed:[u8; 16] = [7; 16];
         let mut rng = SmallRng::from_seed(seed);
         for i in 0..100000 {
-            let x0:i32 = rng.gen_range(0, 320);
+            let x0:i32 = rng.gen_range(240, 320);
             let y0:i32 = rng.gen_range(0, 240);
-            let x1:i32 = rng.gen_range(0, 320);
+            let x1:i32 = rng.gen_range(240, 320);
             let y1:i32 = rng.gen_range(0, 240);
             let color:u32 = rng.gen_range(0, 0x10000);
 
@@ -179,8 +186,8 @@ pub extern fn rust_main() {
 
         let wifiInitConfig = esp_wifi_init_config_default;
         let mut wifiConfig = mem::zeroed::<wifi_config_t>();
-        let ssid = "starbase\0";
-        let password = "hogeFugapiyo\0";
+        let ssid = "ssid\0";
+        let password = "password\0";
         wifiConfig.sta.as_mut().ssid[..ssid.len()].clone_from_slice(ssid.as_bytes());
         wifiConfig.sta.as_mut().password[..password.len()].clone_from_slice(password.as_bytes());
 

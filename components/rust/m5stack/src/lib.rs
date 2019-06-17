@@ -13,17 +13,17 @@ use ili9341::*;
 #[derive(Debug)]
 pub enum M5StackError {
     Generic,
-    M5StackError(IdfError),
+    IdfError(IdfError),
 }
 
 struct FreeRtosDelayMs {}
 impl DelayMs<u16> for FreeRtosDelayMs {
-    fn delay_ms(ms: u16) {
+    fn delay_ms(&mut self, ms: u16) {
         TaskDelay::new().delay_until(Duration::ms(ms as u32));
     }
 }
 
-type M5StackIli = Ili9341<SpiDeviceBusLock<()>, IdfError, NormalGpio, NormalGpio, NormalGpio>;
+type M5StackIli = Ili9341<SpiDeviceBusLock<()>, NormalGpioV1, NormalGpioV1, NormalGpioV1>;
 
 pub fn new_lcd(bus: &mut SpiBus, pin_cs: GpioPin, pin_dc: GpioPin, pin_rst: GpioPin, pin_bl: GpioPin) -> Result<M5StackIli, M5StackError> {
     let spi_device_config = SpiDeviceInterfaceConfig {
@@ -48,9 +48,9 @@ pub fn new_lcd(bus: &mut SpiBus, pin_cs: GpioPin, pin_dc: GpioPin, pin_rst: Gpio
     cs.set_high();
 
     let mut delay = FreeRtosDelayMs{};
-    let device = bus.add_device(spi_device_config, |_| {}, |_| {})
+    let device = bus.add_device(spi_device_config, |_| {}, |_| {});
     match device {
-        Ok(device) => Ok(Ili9341::new(device, cs, dc, reset, &mut delay)),
+        Ok(device) => Ili9341::new(device, cs.to_v1(), dc.to_v1(), rst.to_v1(), &mut delay).map_err(|_| M5StackError::Generic),
         Err(err) => Err(M5StackError::IdfError(err)),
     }
 }

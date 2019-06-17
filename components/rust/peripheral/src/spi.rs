@@ -19,6 +19,10 @@ use idf::std::os::raw::*;
 
 use freertos_rs::*;
 use embedded_hal::blocking::spi::*;
+use embedded_hal::spi::FullDuplex;
+use embedded_hal::blocking::spi::transfer::Default as TransferDefault;
+
+use nb;
 
 use crate::gpio::*;
 
@@ -240,6 +244,8 @@ pub struct SpiDevice<TTransactionContext> {
     config: idf::spi_device_interface_config_t,
     pre_callback: Box<FnMut(&TTransactionContext)>,
     post_callback:  Box<FnMut(&TTransactionContext)>,
+
+    last_word: u8,
 }
 
 struct SpiTransactionContext<'a, TTransactionContext> {
@@ -250,7 +256,7 @@ struct SpiTransactionContext<'a, TTransactionContext> {
 impl<TTransactionContext> SpiDevice<TTransactionContext> {
     fn new<FPre, FPost>(handle: idf::spi_device_handle_t, config: idf::spi_device_interface_config_t, pre_callback: FPre, post_callback: FPost) -> Result<SpiDeviceBusLock<TTransactionContext>, ()> 
         where FPre : FnMut(&TTransactionContext) + 'static, FPost : FnMut(&TTransactionContext) + 'static {
-        Ok( SpiDeviceBusLock::new(SpiDevice{handle: handle, config: config, pre_callback: Box::new(pre_callback), post_callback: Box::new(post_callback)}))
+        Ok( SpiDeviceBusLock::new(SpiDevice{handle: handle, config: config, pre_callback: Box::new(pre_callback), post_callback: Box::new(post_callback), last_word: 0}))
     }
 
     unsafe extern "C" fn pre_callback_handler(idf_transaction: *mut idf::spi_transaction_t) {
@@ -355,5 +361,28 @@ impl Write<u8> for SpiDeviceBusLock<()>
         let transaction = SpiTransaction::<()>::new_write(words, ());
         let mut device = self.lock().unwrap();
         device.transfer(transaction)
+    }
+}
+
+impl TransferDefault<u8> for SpiDeviceBusLock<()> {}
+impl FullDuplex<u8> for SpiDeviceBusLock<()>
+{
+    type Error = IdfError;
+
+    fn read(&mut self) -> nb::Result<u8, IdfError> {
+        Ok(self.lock().unwrap().last_word)
+    }
+    fn send(&mut self, word: u8) -> nb::Result<(), IdfError> {
+        let tx : [u8;1] = [word];
+        let mut rx : [u8;1] = [0];
+        let transaction = SpiTransaction::<()>::new_both(&tx, &mut rx, ());
+        let mut device = self.lock().unwrap();
+        match device.transfer(transaction) {
+            Ok(_) => {
+                device.last_word = rx[0];
+                Ok(())
+            },
+            Err(err) => Err(nb::Error::Other(err)),
+        }
     }
 }
